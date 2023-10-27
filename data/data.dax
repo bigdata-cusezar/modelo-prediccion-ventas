@@ -1,0 +1,216 @@
+﻿define
+
+/**
+ * Filtros
+ */
+
+var filtro_es_apto = filter(ADI_DTM_Inventarios, [Es apto])
+var filtro_periodos = filter(Periodos, [Date] > date(2018, 01, 01) && [Date] <= eomonth(today(), -1))
+
+/**
+ * Tiempos
+ */
+column Periodos[Mes] = month([Date])
+column Periodos[Año] = year([Date])
+
+
+/**
+ * Clase
+ */
+ 
+measure ADI_DTM_MacroProyectos[perfil_comprador] =
+/**
+ * Se utiliza el valor máximo para la primera categorización
+ */
+var valor = [precio_max_unidad]
+return
+switch(
+	true(),
+	
+	-- Inversión
+	[clase_proyecto] = 0 && valor <= 300000000, "Inversión",
+	
+	-- Vivienda
+	valor <= 700000000, "Vivienda",
+	
+	-- Vivienda alto valor
+	"Vivienda alto valor"
+)
+
+measure ADI_DTM_MacroProyectos[perfil_comprador_complementario] =
+/**
+ * Se utiliza el valor máximo para la segunda categorización
+ */
+var valor = [precio_max_unidad]
+return
+switch(
+	true(),
+	
+	-- Inversión <#V2> Revisar como mejorar la caracterización
+	valor <= 300000000, "Inversión",
+	
+	-- Vivienda
+	valor <= 700000000, "Vivienda",
+	
+	-- Vivienda alto valor
+	"Vivienda alto valor"
+)
+ 
+measure ADI_DTM_MacroProyectos[clase_proyecto] =
+if(
+	max(ADI_DTM_Proyectos[PryVIS]) = "Si",
+	1,
+	0
+)
+
+/**
+ * Ventas
+ */
+measure ADI_DTM_Proyectos[cantidad_ventas] = sum(cbr_cierre_mensual[Neto_Q])
+measure ADI_DTM_Proyectos[valor_ventas] = sum(cbr_cierre_mensual[Neto_$])
+
+/**
+ * Precio
+ */
+
+measure ADI_DTM_Inventarios[precio_total] = sum(ADI_DTM_Inventarios[InvValorUnidadListaVigente])
+
+measure ADI_DTM_Inventarios[precio_promedio_unidad] = average(ADI_DTM_Inventarios[InvValorUnidadListaVigente])
+
+measure ADI_DTM_Inventarios[precio_promedio_ponderado_unidad] =
+averagex(
+	ADI_DTM_Proyectos,
+	var total_centro_costo =
+	calculate(
+		[precio_promedio_unidad],
+		removefilters(ADI_DTM_Proyectos)
+	)
+	return
+	divide(
+		[precio_promedio_unidad],
+		total_centro_costo
+	)
+)
+
+measure ADI_DTM_Inventarios[precio_min_unidad] = min(ADI_DTM_Inventarios[InvValorUnidadListaVigente])
+
+measure ADI_DTM_Inventarios[precio_max_unidad] = max(ADI_DTM_Inventarios[InvValorUnidadListaVigente])
+
+/**
+ * Plazo
+ */
+
+column ADI_DTM_Proyectos[plazo] = 
+var plazo =
+datediff(
+	today(),
+	[PryFechaEntrega],
+	day
+)
+return
+if(
+	plazo >= 0, plazo
+)
+
+measure ADI_DTM_Inventarios[plazo_promedio_unidad] = average(ADI_DTM_Proyectos[plazo])
+
+measure ADI_DTM_Inventarios[plazo_min_unidad] = min(ADI_DTM_Proyectos[plazo])
+
+measure ADI_DTM_Inventarios[plazo_max_unidad] = max(ADI_DTM_Proyectos[plazo])
+
+/**
+ * Área
+ */
+
+measure ADI_DTM_Inventarios[area_total] = sum(ADI_DTM_Inventarios[InvArConstruida])
+
+measure ADI_DTM_Inventarios[area_promedio_unidad] = average(ADI_DTM_Inventarios[InvArConstruida])
+
+measure ADI_DTM_Inventarios[area_min_unidad] = min(ADI_DTM_Inventarios[InvArConstruida])
+
+measure ADI_DTM_Inventarios[area_max_unidad] = max(ADI_DTM_Inventarios[InvArConstruida])
+
+
+
+
+evaluate
+summarizecolumns(
+
+	/** Serie **/
+	Periodos[Año],
+	Periodos[Mes],
+	ADI_DTM_MacroProyectos[MacNombreMacro],
+	
+	/** Filtros **/
+	filtro_es_apto,
+	filtro_periodos,
+	
+	/** Excluídas **/
+	"empresa_x",
+	max(ADI_DTM_Empresas[EmpresaNombre]),
+	
+	/** Exógenas **/	
+	
+	/** Geográficas **/
+	"geo_ciudad",
+	MAX(ADI_DTM_MacroProyectos[MacCiudad]),
+	"geo_clase_zona",
+	blank(),
+	"geo_seguridad",
+	blank(),
+	"geo_cercania_lugares",
+	blank(),
+	"geo_calidad_infraestructura",
+	blank(),
+	
+	
+	/** Proyecto **/
+	"perfil_comprador",
+	[perfil_comprador],
+	"perfil_comprador_complementario",
+	[perfil_comprador_complementario],
+	"clase_proyecto",
+	[clase_proyecto],
+	--"precio_total",
+	--[precio_total],
+	"precio_promedio_unidad",
+	[precio_promedio_unidad],
+	--"precio_promedio_ponderado_unidad",
+	--[precio_promedio_ponderado_unidad],
+	"precio_min_unidad",
+	[precio_min_unidad],
+	"precio_max_unidad",
+	[precio_max_unidad],
+	"plazo_promedio_unidad",
+	[plazo_promedio_unidad],
+	"plazo_min_unidad",
+	[plazo_min_unidad],
+	"plazo_max_unidad",
+	[plazo_max_unidad],
+	--"area_total",
+	--[area_total],
+	"area_promedio_unidad",
+	[area_promedio_unidad],
+	"area_min_unidad",
+	[area_min_unidad],
+	"area_max_unidad",
+	[area_max_unidad],
+	"area_proyecto",
+	[area_total],
+	--"area_zonas_comunes",
+	--[area_plazoleta],
+	"calidad_unidades",
+	blank(),
+	"presupuesto_marketing",
+	blank(),
+	
+	
+	/** Endógenas **/
+	"cantidad_ventas",
+	[cantidad_ventas]
+	
+	--"valor_ventas",
+	--[valor_ventas]
+)
+
+order by Periodos[Año] desc, Periodos[Mes] desc
